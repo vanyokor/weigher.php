@@ -6,38 +6,24 @@
 // GET параметр, который необходимо передать в скрипт, для его запуска
 define('STARTER', 'run');
 
-// Самоудаление скрипта, при попытке запуска, через сутки
-if (time() > (filectime(__FILE__) + 86400)) {
-    @unlink(__FILE__);
-    exit('file timeout');
-}
-// Самоудаление скрипта по get запросу
-if (isset($_GET['delete'])) {
-    if (is_writable(__FILE__)) {
-        unlink(__FILE__);
-        exit('deleted');
-    } else {
-        exit('Error! no permission to delete');
-    }
-}
+// запуск таймера, чтобы скрипт не сканировал больше минуты
+define('START_TIME', time());
 
-// Для запуска, не забудь добавить GET параметр в адресную строку
-if (!isset($_GET[STARTER])) {
-    die();
-}
+// Теги для каждой единицы измерения
+define('METRICS', array('z','y','x','w','t'));// B KB MB GB TB
+
 
 /*
     Форматирование размера файла
 */
 function format_size($size)
 {
-    $metrics = array('z','y','x','w','t');// B KB MB GB TB
     $metric = 0;
     while (floor($size / 1024) > 0) {
         ++$metric;
         $size /= 1024;
     }
-    $exp = isset($metrics[$metric]) ? $metrics[$metric] : '??';
+    $exp = isset(METRICS[$metric]) ? METRICS[$metric] : '??';
     $size = round($size, 1);
     $ret =  "<$exp>$size</$exp>";
     return $ret;
@@ -69,10 +55,8 @@ function get_file_size($file)
 /*
     Рекурсивное сканирование файлов
 */
-function scan_recursive($directory)
+function scan_recursive($directory, &$interrupted)
 {
-    global $start_time, $interrupted;
-
     $dirs = array();
     $files = array();
     $size = 0;
@@ -85,7 +69,7 @@ function scan_recursive($directory)
             if (is_link($filename)) {
                 continue;
             } elseif (is_dir($filename)) {
-                $subfolder = scan_recursive($filename);
+                $subfolder = scan_recursive($filename, $interrupted);
                 if ($subfolder['size']) {
                     $dirs[$subfolder['size']][] = $subfolder;
                     $size += $subfolder['size'];
@@ -98,7 +82,7 @@ function scan_recursive($directory)
                 }
             }
 
-            if ((time() - $start_time) > 55) {
+            if ((time() - START_TIME) > 55) {
                 $interrupted = true;
                 return;
             }
@@ -139,8 +123,26 @@ function show_recursive($dir)
     echo '</d>';
 }
 
-// запуск таймера, чтобы скрипт не сканировал больше минуты
-$start_time = time();
+// Самоудаление скрипта, при попытке запуска, через сутки
+if (time() > (filectime(__FILE__) + 86400)) {
+    @unlink(__FILE__);
+    exit('file timeout');
+}
+// Самоудаление скрипта по get запросу
+if (isset($_GET['delete'])) {
+    if (is_writable(__FILE__)) {
+        unlink(__FILE__);
+        exit('deleted');
+    } else {
+        exit('Error! no permission to delete');
+    }
+}
+
+// Для запуска, не забудь добавить GET параметр в адресную строку
+if (!isset($_GET[STARTER])) {
+    die();
+}
+
 
 // Выбор режима сканирования
 $started = false;
@@ -175,7 +177,7 @@ ini_set('max_execution_time', '60');
 <?php
 if ($started) {
     // Запуск
-    $files = scan_recursive('.');
+    $files = scan_recursive('.', $interrupted);
     show_recursive($files);
 
     if ($interrupted) {
