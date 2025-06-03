@@ -64,6 +64,7 @@ function scan_recursive($directory, &$interrupted)
     if (is_readable($directory)) {
         $dir = array_diff(scandir($directory), array('.', '..'));
         foreach ($dir as $fname) {
+            if ($interrupted) continue;
             $filename = $directory.DIRECTORY_SEPARATOR.$fname;
 
             if (is_link($filename)) {
